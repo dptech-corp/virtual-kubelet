@@ -88,7 +88,7 @@ spec:
   serviceAccountName: virtual-kubelet
   containers:
     - name: vkubelet-slurm-0
-      image: dptechnology/hpc/vk:latest
+      image: dptechnology/hpc-vk:latest
       imagePullPolicy: Always
       args: ["--nodename", "vkubelet-slurm-0", "--provider", "slurm", "--startup-timeout", "10s", "--klog.v", "10"]
       volumeMounts:
