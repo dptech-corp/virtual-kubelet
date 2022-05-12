@@ -112,7 +112,7 @@
   version = "2.3.0"
 
 [[constraint]]
-  name = "github.com/sylabs/wlm-operator"
+  name = "github.com/dptech-corp/wlm-operator"
   branch = "master"
 
 [prune]

@@ -788,7 +788,7 @@
 [[projects]]
   branch = "master"
   digest = "1:d00a47fea60362f588039b63337f1b759a512e7a3382dd81710a055e9540060d"
-  name = "github.com/sylabs/wlm-operator"
+  name = "github.com/dptech-corp/wlm-operator"
   packages = [
     "pkg/operator/apis/wlm/v1alpha1",
     "pkg/operator/client/clientset/versioned",
@@ -1434,9 +1434,9 @@
     "github.com/sirupsen/logrus",
     "github.com/spf13/cobra",
     "github.com/spf13/pflag",
-    "github.com/sylabs/wlm-operator/pkg/operator/apis/wlm/v1alpha1",
-    "github.com/sylabs/wlm-operator/pkg/operator/client/clientset/versioned",
-    "github.com/sylabs/wlm-operator/pkg/workload/api",
+    "github.com/dptech-corp/wlm-operator/pkg/operator/apis/wlm/v1alpha1",
+    "github.com/dptech-corp/wlm-operator/pkg/operator/client/clientset/versioned",
+    "github.com/dptech-corp/wlm-operator/pkg/workload/api",
     "github.com/virtual-kubelet/azure-aci/client",
     "github.com/virtual-kubelet/azure-aci/client/aci",
     "github.com/virtual-kubelet/azure-aci/client/api",

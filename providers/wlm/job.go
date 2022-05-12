@@ -21,11 +21,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/sylabs/wlm-operator/pkg/operator/client/clientset/versioned"
+	"github.com/dptech-corp/wlm-operator/pkg/operator/client/clientset/versioned"
 
 	"github.com/pkg/errors"
-	"github.com/sylabs/wlm-operator/pkg/operator/apis/wlm/v1alpha1"
-	sAPI "github.com/sylabs/wlm-operator/pkg/workload/api"
+	"github.com/dptech-corp/wlm-operator/pkg/operator/apis/wlm/v1alpha1"
+	sAPI "github.com/dptech-corp/wlm-operator/pkg/workload/api"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

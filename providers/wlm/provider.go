@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/sylabs/wlm-operator/pkg/operator/client/clientset/versioned"
-	sAPI "github.com/sylabs/wlm-operator/pkg/workload/api"
+	"github.com/dptech-corp/wlm-operator/pkg/operator/client/clientset/versioned"
+	sAPI "github.com/dptech-corp/wlm-operator/pkg/workload/api"
 	"google.golang.org/grpc"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
