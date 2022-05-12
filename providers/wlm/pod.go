@@ -229,7 +229,7 @@ func (p *Provider) GetPodStatus(ctx context.Context, namespace, name string) (*v
 	pj, ok := p.pods[podName(namespace, name)]
 	if ok {
 		// if uploading data
-		if pj.jobID == 0 {
+		if pj.prepareData != nil && pj.jobID == 0 {
 			pp, err := p.coreClient.Pods(namespace).Get(name + "-prepare", metav1.GetOptions{})
 			if err != nil {
 				log.Printf("Could not find pod %s", name + "-prepare")
