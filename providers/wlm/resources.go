@@ -157,7 +157,7 @@ func (wd *watchDog) watch() {
 		// clean up old labels.
 		labelsToRemove := make(map[string]string)
 		for _, f := range wd.prevFeatures {
-			labelsToRemove[featureKey(f)] = strconv.FormatInt(f.Quantity, 10)
+			labelsToRemove[featureKey(f)] = intToLabel(f.Quantity)
 		}
 		if len(labelsToRemove) != 0 {
 			if err := wd.k8s.RemoveNodeLabels(vkPodName, labelsToRemove); err != nil {
@@ -168,14 +168,14 @@ func (wd *watchDog) watch() {
 		labels := map[string]string{
 			"partition": wd.partition,
 
-			"nodes":        strconv.FormatInt(resResp.Nodes, 10),
-			"wall-time":    strconv.FormatInt(resResp.WallTime, 10),
-			"cpu-per-node": strconv.FormatInt(resResp.CpuPerNode, 10),
-			"mem-per-node": strconv.FormatInt(resResp.MemPerNode, 10),
+			"nodes":        intToLabel(resResp.Nodes),
+			"wall-time":    intToLabel(resResp.WallTime),
+			"cpu-per-node": intToLabel(resResp.CpuPerNode),
+			"mem-per-node": intToLabel(resResp.MemPerNode),
 		}
 
 		for _, f := range resResp.Features {
-			labels[featureKey(f)] = strconv.FormatInt(f.Quantity, 10)
+			labels[featureKey(f)] = intToLabel(f.Quantity)
 		}
 
 		if err := wd.k8s.AddNodeLabels(vkPodName, labels); err != nil {
@@ -184,6 +184,14 @@ func (wd *watchDog) watch() {
 
 		wd.prevFeatures = resResp.Features
 	}
+}
+
+func intToLabel(i int64) string {
+	// -1 is not allowed for label in k8s
+	if i == -1 {
+		return "nan"
+	}
+	return strconv.FormatInt(i, 10)
 }
 
 func featureKey(f *api.Feature) string {

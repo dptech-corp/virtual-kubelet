@@ -41,14 +41,79 @@ func (p *Provider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	pod.Status.StartTime = &now
 
 	job := newJob(*pod, p.wlmAPI, p.wlmClient)
-
-	if err := job.Start(); err != nil && err != errNotWlmJob {
-		return errors.Wrap(err, "Could not start job")
-	}
-
 	p.pods[podName(pod.Namespace, pod.Name)] = job
 
+	if job.prepareData == nil {
+		if err := job.Start(); err != nil && err != errNotWlmJob {
+			return errors.Wrap(err, "Could not start job")
+		}
+	} else {
+		if err := p.startPreparingDataPod(pod, job.prepareData); err != nil {
+			log.Printf("Can't prepare job data: %s", err)
+		}
+	}
+
 	return nil
+}
+
+// startPreparingDataPod creates a new pod which will transfer data from
+// mounted volume to slurm cluster.
+func (p *Provider) startPreparingDataPod(jobPod *v1.Pod, d *v1alpha1.PrepareData) error {
+	preparePod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobPod.Name + "-prepare",
+			Namespace: jobPod.Namespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:            "pr1",
+					Image:           resultsImage,
+					ImagePullPolicy: v1.PullIfNotPresent,
+					Args: []string{
+						fmt.Sprintf("--from=/mnt/%s", d.Mount.Name),
+						fmt.Sprintf("--to=%s", d.To),
+						"--sock=/red-box.sock",
+						"--upload",
+					},
+					VolumeMounts: []v1.VolumeMount{
+						{
+							Name:      "red-box-sock",
+							MountPath: "/red-box.sock",
+						},
+						{
+							Name:      d.Mount.Name,
+							MountPath: fmt.Sprintf("/mnt/%s", d.Mount.Name),
+						},
+					},
+				},
+			},
+			Volumes: []v1.Volume{
+				{
+					Name: "red-box-sock",
+					VolumeSource: v1.VolumeSource{
+						HostPath: &v1.HostPathVolumeSource{
+							Path: "/var/run/syslurm/red-box.sock",
+							Type: &[]v1.HostPathType{v1.HostPathSocket}[0],
+						},
+					},
+				},
+				d.Mount,
+			},
+			NodeSelector: map[string]string{
+				"kubernetes.io/hostname": vkHostNode,
+			},
+			SecurityContext: &v1.PodSecurityContext{
+				RunAsUser:  &p.uid,
+				RunAsGroup: &p.gid,
+			},
+			RestartPolicy: v1.RestartPolicyNever,
+		},
+	}
+	preparePod.OwnerReferences = jobPod.OwnerReferences // allows k8s to delete pod after parent SlurmJob kind be deleted.
+
+	_, err := p.coreClient.Pods(jobPod.Namespace).Create(preparePod)
+	return errors.Wrap(err, "could not create prepare data pod")
 }
 
 // UpdatePod updates pod.
@@ -163,28 +228,43 @@ func (p *Provider) GetPodStatus(ctx context.Context, namespace, name string) (*v
 
 	pj, ok := p.pods[podName(namespace, name)]
 	if ok {
-		jobStatus, err := pj.Status()
-		if err != nil {
-			if err != errNotWlmJob {
-				return nil, errors.Wrap(err, "Could not get job status")
+		// if uploading data
+		if pj.jobID == 0 {
+			pp, err := p.coreClient.Pods(namespace).Get(name + "-prepare", metav1.GetOptions{})
+			if err != nil {
+				log.Printf("Could not find pod %s", name + "-prepare")
 			}
-
-			return status, nil
-		}
-
-		switch jobStatus {
-		case sAPI.JobStatus_COMPLETED:
-			status.ContainerStatuses[0].State.Terminated = &v1.ContainerStateTerminated{
-				Reason: "Job finished",
-			}
-			status.Phase = v1.PodSucceeded
-			if pj.jobResults != nil {
-				if err := p.startCollectingResultsPod(&pj.pod, pj.jobResults); err != nil {
-					log.Printf("Can't collect job results: %s", err)
+			if pp.Status.Phase == v1.PodSucceeded {
+				if err := pj.Start(); err != nil && err != errNotWlmJob {
+					return nil, errors.Wrap(err, "Could not start job")
 				}
+			} else if pp.Status.Phase == v1.PodFailed {
+				status.Phase = v1.PodFailed
 			}
-		case sAPI.JobStatus_FAILED, sAPI.JobStatus_CANCELLED:
-			status.Phase = v1.PodFailed
+		} else {
+			jobStatus, err := pj.Status()
+			if err != nil {
+				if err != errNotWlmJob {
+					return nil, errors.Wrap(err, "Could not get job status")
+				}
+
+				return status, nil
+			}
+
+			switch jobStatus {
+			case sAPI.JobStatus_COMPLETED:
+				status.ContainerStatuses[0].State.Terminated = &v1.ContainerStateTerminated{
+					Reason: "Job finished",
+				}
+				status.Phase = v1.PodSucceeded
+				if pj.jobResults != nil {
+					if err := p.startCollectingResultsPod(&pj.pod, pj.jobResults); err != nil {
+						log.Printf("Can't collect job results: %s", err)
+					}
+				}
+			case sAPI.JobStatus_FAILED, sAPI.JobStatus_CANCELLED:
+				status.Phase = v1.PodFailed
+			}
 		}
 	}
 
@@ -216,7 +296,7 @@ func (p *Provider) startCollectingResultsPod(jobPod *v1.Pod, r *v1alpha1.JobResu
 				{
 					Name:            "cr1",
 					Image:           resultsImage,
-					ImagePullPolicy: v1.PullAlways,
+					ImagePullPolicy: v1.PullIfNotPresent,
 					Args: []string{
 						fmt.Sprintf("--from=%s", r.From),
 						"--to=/collect",

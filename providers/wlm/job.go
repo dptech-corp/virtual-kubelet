@@ -17,6 +17,7 @@ package wlm
 import (
 	"bytes"
 	"log"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -47,6 +48,7 @@ type job struct {
 	jobID      int64
 	jobInfo    *sAPI.JobInfo
 	jobResults *v1alpha1.JobResults
+	prepareData *v1alpha1.PrepareData
 
 	wlmPod bool
 	pod    v1.Pod
@@ -64,12 +66,21 @@ func newJob(p v1.Pod, wlmAPI sAPI.WorkloadManagerClient, wlmClient *versioned.Cl
 		}
 	}
 
-	return &job{
+	ji := job{
 		wlmAPI:    wlmAPI,
 		wlmClient: wlmClient,
 		wlmPod:    wlmPod,
 		pod:       p,
 	}
+
+	sj, err := wlmClient.WlmV1alpha1().SlurmJobs(p.Namespace).Get(p.OwnerReferences[0].Name, metav1.GetOptions{})
+	if err != nil {
+		log.Printf("can't get spec.prepare")
+	} else {
+		ji.prepareData = sj.Spec.Prepare
+	}
+
+	return &ji
 }
 
 // Start starts wlm or slurm job.
@@ -98,6 +109,10 @@ func (ji *job) Cancel() error {
 		return errNotWlmJob
 	}
 
+	if ji.jobID == 0 {
+		return nil
+	}
+
 	_, err := ji.wlmAPI.CancelJob(context.Background(), &sAPI.CancelJobRequest{JobId: ji.jobID})
 	return errors.Wrapf(err, "can't cancel job %d", ji.jobID)
 }
@@ -107,6 +122,10 @@ func (ji *job) Cancel() error {
 func (ji *job) Logs() (*bytes.Buffer, error) {
 	if !ji.wlmPod {
 		return nil, errNotWlmJob
+	}
+
+	if ji.jobID == 0 {
+		return &bytes.Buffer{}, nil
 	}
 
 	infoR, err := ji.wlmAPI.JobInfo(context.Background(), &sAPI.JobInfoRequest{JobId: ji.jobID})
@@ -148,6 +167,11 @@ func (ji *job) Status() (sAPI.JobStatus, error) {
 		return 0, errNotWlmJob
 	}
 
+	if ji.jobID == 0 {
+		return 4, nil
+	}
+
+	time.Sleep(time.Duration(100)*time.Second)
 	infoR, err := ji.wlmAPI.JobInfo(context.Background(), &sAPI.JobInfoRequest{JobId: ji.jobID})
 	if err != nil {
 		return 0, errors.Wrapf(err, "can't get status for %d", ji.jobID)
