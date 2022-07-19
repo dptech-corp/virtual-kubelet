@@ -68,7 +68,7 @@ func (p *Provider) startPreparingDataPod(jobPod *v1.Pod, d *v1alpha1.PrepareData
 			Containers: []v1.Container{
 				{
 					Name:            "pr1",
-					Image:           prepareImage,
+					Image:           resultsImage,
 					ImagePullPolicy: v1.PullIfNotPresent,
 					Args: []string{
 						fmt.Sprintf("--from=/mnt/%s", d.Mount.Name),
