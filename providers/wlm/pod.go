@@ -68,7 +68,7 @@ func (p *Provider) startPreparingDataPod(jobPod *v1.Pod, d *v1alpha1.PrepareData
 			Containers: []v1.Container{
 				{
 					Name:            "pr1",
-					Image:           resultsImage,
+					Image:           prepareImage,
 					ImagePullPolicy: v1.PullIfNotPresent,
 					Args: []string{
 						fmt.Sprintf("--from=/mnt/%s", d.Mount.Name),
@@ -253,14 +253,23 @@ func (p *Provider) GetPodStatus(ctx context.Context, namespace, name string) (*v
 
 			switch jobStatus {
 			case sAPI.JobStatus_COMPLETED:
-				status.ContainerStatuses[0].State.Terminated = &v1.ContainerStateTerminated{
-					Reason: "Job finished",
-				}
-				status.Phase = v1.PodSucceeded
 				if pj.jobResults != nil {
-					if err := p.startCollectingResultsPod(&pj.pod, pj.jobResults); err != nil {
-						log.Printf("Can't collect job results: %s", err)
+					pc, err := p.coreClient.Pods(namespace).Get(name + "-collect", metav1.GetOptions{})
+					if err != nil {
+						if err := p.startCollectingResultsPod(&pj.pod, pj.jobResults); err != nil {
+							log.Printf("Can't collect job results: %s", err)
+						}
+					} else if pc.Status.Phase == v1.PodSucceeded {
+						status.ContainerStatuses[0].State.Terminated = &v1.ContainerStateTerminated{
+							Reason: "Job finished",
+						}
+						status.Phase = v1.PodSucceeded
 					}
+				} else {
+					status.ContainerStatuses[0].State.Terminated = &v1.ContainerStateTerminated{
+						Reason: "Job finished",
+					}
+					status.Phase = v1.PodSucceeded
 				}
 			case sAPI.JobStatus_FAILED, sAPI.JobStatus_CANCELLED:
 				status.Phase = v1.PodFailed
